@@ -30,11 +30,7 @@ class ChecklistUI:
         self._is_maximized = False
         self._original_geom = ""
 
-        # canvas items
-        self.canvas = None
-        self.bg_image_id = None
-        self.content_window_id = None
-
+        # build basic window + UI structure
         self._build_window()
         self._load_images()
         self._build_menus()
@@ -45,7 +41,12 @@ class ChecklistUI:
         self._build_title()
         self._build_list()
 
-        # render backgrounds after widgets know their sizes
+        # # DEBUG + first render
+        # print("=== ABOUT TO CALL _render_backgrounds DIRECTLY ===")
+        # self._render_backgrounds()
+        # print("=== RETURNED FROM _render_backgrounds ===")
+
+        # re-render after layout settles
         self.root.after(50, self._render_backgrounds)
 
     # ---------- window ----------
@@ -231,28 +232,46 @@ class ChecklistUI:
 
         # keep content stretched horizontally when canvas resizes
         def on_canvas_resize(event):
+            # keep content frame stretched
             self.canvas.itemconfigure(
                 self.content_window_id,
                 width=event.width,
             )
 
+            # only redraw background when the canvas is actually a real size
+            if event.width > 10 and event.height > 10:
+                print("  on_canvas_resize -> calling _render_backgrounds")
+                self._render_backgrounds()
+
         self.canvas.bind("<Configure>", on_canvas_resize)
+
 
     def _render_backgrounds(self):
         print("=== _render_backgrounds CALLED ===")
+        if self.base_app_bg_img is None:
+            print("No app bg loaded")
+            return
 
-        # TEMP: draw a red square in the middle of the window
-        try:
-            # if you are on the canvas version:
-            self.canvas.create_rectangle(50, 50, 200, 200, fill="red", outline="")
-        except Exception as e:
-            print("ERROR drawing on canvas:", e)
+        w = self.canvas.winfo_width()
+        h = self.canvas.winfo_height()
+        print("Canvas size:", w, "x", h)
 
-        try:
-            # if you are on the frame/label version:
-            self.outer_bg_label.configure(bg="red")
-        except Exception as e:
-            print("ERROR setting outer_bg_label:", e)
+        if w < 5 or h < 5:
+            return  # window hasn't drawn yet
+
+        resized = self.base_app_bg_img.resize((w, h), Image.BILINEAR)
+        self.images["app_bg_scaled"] = ImageTk.PhotoImage(resized)
+
+        if self.bg_image_id is None:
+            self.bg_image_id = self.canvas.create_image(
+                0, 0,
+                anchor="nw",
+                image=self.images["app_bg_scaled"]
+            )
+            print("Created bg_image_id:", self.bg_image_id)
+        else:
+            self.canvas.itemconfig(self.bg_image_id, image=self.images["app_bg_scaled"])
+            print("Updated bg_image_id:", self.bg_image_id)
 
     # # ---------- backgrounds ----------
     # def _render_backgrounds(self):
@@ -315,13 +334,13 @@ class ChecklistUI:
             # base checkbox kwargs
             cb_kwargs = dict(
                 variable=var,
-                bg=PAGE_BG_FALLBACK,
-                activebackground=PAGE_BG_FALLBACK,
                 highlightthickness=0,
                 bd=0,
                 pady=0,
                 padx=0,
+                # let Tk use the parent bg instead of painting a solid block
             )
+
 
             # use custom images if available
             if self.checkbox_unchecked and self.checkbox_checked:
@@ -340,10 +359,10 @@ class ChecklistUI:
                 row_frame,
                 text="",
                 font=("Consolas", 14),
-                bg=PAGE_BG_FALLBACK,
                 fg="black",
                 anchor="w",
             )
+
             label.pack(side="left", fill="x", expand=True, padx=(10, 0))
 
             # hidden Entry used only while editing
