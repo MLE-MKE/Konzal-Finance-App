@@ -6,26 +6,25 @@ from pathlib import Path
 from PIL import Image, ImageTk
 
 PURPLE = "#6a1b9a"
-PAGE_BG_FALLBACK = "#ffffff"
+PAGE_BG_FALLBACK = "#e7cbff"
 
-ASSETS_DIR = Path(__file__).parent / "assets" / "ui"
+ASSETS_DIR = Path(__file__).parent / "assets"
 
 
 class ChecklistUI:
     def __init__(self, root: tk.Tk):
         self.root = root
 
-        # image caches (prevent garbage collection)
+        # image storage
         self.base_tabbar_img = None
         self.base_app_bg_img = None
         self.base_page_bg_img = None
-        self.images: dict[str, object] = {}
-
         self.checkbox_unchecked = None
         self.checkbox_checked = None
         self.icon_min = None
         self.icon_max = None
         self.icon_close = None
+        self.images: dict[str, object] = {}
 
         self.title_height = 60
         self._drag_data = {"x": 0, "y": 0}
@@ -34,136 +33,80 @@ class ChecklistUI:
 
         self._build_window()
         self._load_images()
+        self._build_menus()
         self._build_custom_titlebar()
         self._build_page()
         self._build_title()
         self._build_list()
 
-        # initial background renders (after layout)
+        # render backgrounds after widgets know their sizes
         self.root.after(50, self._render_backgrounds)
+        
+        # allow dragging from more areas, not just title bar
+        for widget in (self.title_canvas, self.outer, self.page):
+            widget.bind("<ButtonPress-1>", self._start_move)
+            widget.bind("<B1-Motion>", self._on_move)
 
-    # ---------- base window ----------
+
+    # ---------- window ----------
     def _build_window(self):
         self.root.title("Checklist Quest")
         self.root.geometry("600x800")
         self.root.minsize(600, 800)
         self.root.configure(bg=PURPLE)
-
-        # remove native title bar
-        self.root.overrideredirect(True)
-
-        # re-render graphics on resize
+        self.root.overrideredirect(True)  # remove OS title bar
         self.root.bind("<Configure>", self._on_resize)
 
     # ---------- load images ----------
     def _load_images(self):
-        # top bar
-        tabbar_path = ASSETS_DIR / "tabbar.png"
-        if tabbar_path.exists():
-            self.base_tabbar_img = Image.open(tabbar_path).convert("RGBA")
+        print("ASSETS_DIR =", ASSETS_DIR.resolve())
 
-        # full app background
-        app_bg_path = ASSETS_DIR / "app_background.png"
-        if app_bg_path.exists():
-            self.base_app_bg_img = Image.open(app_bg_path).convert("RGBA")
+        def dbg(name: str):
+            p = ASSETS_DIR / name
+            print(name, "exists:", p.exists(), "->", p)
+            return p
 
-        # page background
-        page_bg_path = ASSETS_DIR / "page_bg.png"
-        if page_bg_path.exists():
-            self.base_page_bg_img = Image.open(page_bg_path).convert("RGBA")
+        # tabbar
+        p = dbg("tabbar.png")
+        if p.exists():
+            self.base_tabbar_img = Image.open(p).convert("RGBA")
 
-        # checkbox icons
-        cb_unchecked_path = ASSETS_DIR / "checkbox_unchecked.png"
-        cb_checked_path = ASSETS_DIR / "checkbox_checked_purple.png"
-        if cb_unchecked_path.exists() and cb_checked_path.exists():
+        # full background (galaxy)
+        p = dbg("app_background.png")
+        if p.exists():
+            self.base_app_bg_img = Image.open(p).convert("RGBA")
+
+        # page background (notebook)
+        p = dbg("page_bg.png")
+        if p.exists():
+            self.base_page_bg_img = Image.open(p).convert("RGBA")
+
+        # checkboxes
+        p_unchecked = dbg("checkbox_unchecked.png")
+        p_checked = dbg("checkbox_checked_purple.png")
+        if p_unchecked.exists() and p_checked.exists():
             self.checkbox_unchecked = ImageTk.PhotoImage(
-                Image.open(cb_unchecked_path).convert("RGBA")
+                Image.open(p_unchecked).convert("RGBA")
             )
             self.checkbox_checked = ImageTk.PhotoImage(
-                Image.open(cb_checked_path).convert("RGBA")
+                Image.open(p_checked).convert("RGBA")
             )
             self.images["cb_unchecked"] = self.checkbox_unchecked
             self.images["cb_checked"] = self.checkbox_checked
 
-        # window control icons (scaled to 20x20)
-        min_path = ASSETS_DIR / "minimize.png"
-        max_path = ASSETS_DIR / "maximize.png"
-        close_path = ASSETS_DIR / "close.png"
-
-        def load_icon(p):
+        # window icons
+        def load_icon(name: str, size=(20, 20)):
+            p = dbg(name)
             if p.exists():
-                img = Image.open(p).convert("RGBA").resize((20, 20), Image.BILINEAR)
-                return ImageTk.PhotoImage(img)
+                img = Image.open(p).convert("RGBA").resize(size, Image.BILINEAR)
+                tk_img = ImageTk.PhotoImage(img)
+                self.images[name] = tk_img
+                return tk_img
             return None
 
-        self.icon_min = load_icon(min_path)
-        self.icon_max = load_icon(max_path)
-        self.icon_close = load_icon(close_path)
-
-        if self.icon_min:
-            self.images["icon_min"] = self.icon_min
-        if self.icon_max:
-            self.images["icon_max"] = self.icon_max
-        if self.icon_close:
-            self.images["icon_close"] = self.icon_close
-
-    # ---------- title bar ----------
-    def _build_custom_titlebar(self):
-        self.title_canvas = tk.Canvas(
-            self.root,
-            height=self.title_height,
-            highlightthickness=0,
-            bd=0,
-            bg=PURPLE,
-        )
-        self.title_canvas.pack(fill="x", side="top")
-
-        self._render_tabbar()
-
-        # drag
-        self.title_canvas.bind("<ButtonPress-1>", self._start_move)
-        self.title_canvas.bind("<B1-Motion>", self._on_move)
-
-        # clicks (tabs + buttons)
-        self.title_canvas.bind("<Button-1>", self._on_title_click)
-
-        # logical menus for popups
-        self._build_menus()
-
-    def _render_tabbar(self):
-        """Render scaled tabbar and window icons."""
-        self.title_canvas.delete("all")
-
-        width = max(self.root.winfo_width(), 1)
-        height = self.title_height
-
-        # scale bar
-        if self.base_tabbar_img is not None:
-            resized = self.base_tabbar_img.resize((width, height), Image.BILINEAR)
-            self.images["tabbar_scaled"] = ImageTk.PhotoImage(resized)
-            self.title_canvas.create_image(
-                0, 0, anchor="nw", image=self.images["tabbar_scaled"], tags="tabbar"
-            )
-        else:
-            self.title_canvas.create_rectangle(
-                0, 0, width, height, fill=PURPLE, outline="", tags="tabbar"
-            )
-
-        # draw window icons
-        self.title_canvas.delete("window_icons")
-        cy = height // 2
-        if self.icon_min:
-            self.title_canvas.create_image(
-                int(0.875 * width), cy, image=self.icon_min, tags="window_icons"
-            )
-        if self.icon_max:
-            self.title_canvas.create_image(
-                int(0.92 * width), cy, image=self.icon_max, tags="window_icons"
-            )
-        if self.icon_close:
-            self.title_canvas.create_image(
-                int(0.973 * width), cy, image=self.icon_close, tags="window_icons"
-            )
+        self.icon_min = load_icon("minimize.png")
+        self.icon_max = load_icon("maximize.png")
+        self.icon_close = load_icon("close.png")
 
     # ---------- menus ----------
     def _build_menus(self):
@@ -210,34 +153,77 @@ class ChecklistUI:
             command=self._todo,
         )
 
-    # ---------- background + page ----------
+    # ---------- title bar ----------
+    def _build_custom_titlebar(self):
+        self.title_canvas = tk.Canvas(
+            self.root,
+            height=self.title_height,
+            highlightthickness=0,
+            bd=0,
+            bg=PURPLE,
+        )
+        self.title_canvas.pack(fill="x", side="top")
+
+        self._render_tabbar()
+
+        # drag + clicks
+        self.title_canvas.bind("<ButtonPress-1>", self._start_move)
+        self.title_canvas.bind("<B1-Motion>", self._on_move)
+        self.title_canvas.bind("<Button-1>", self._on_title_click)
+
+    def _render_tabbar(self):
+        self.title_canvas.delete("all")
+        width = max(self.root.winfo_width(), 1)
+        height = self.title_height
+
+        # bar
+        if self.base_tabbar_img is not None:
+            resized = self.base_tabbar_img.resize((width, height), Image.BILINEAR)
+            self.images["tabbar_scaled"] = ImageTk.PhotoImage(resized)
+            self.title_canvas.create_image(
+                0, 0, anchor="nw", image=self.images["tabbar_scaled"], tags="tabbar"
+            )
+        else:
+            self.title_canvas.create_rectangle(
+                0, 0, width, height, fill=PURPLE, outline="", tags="tabbar"
+            )
+
+        # window icons (aligned vertically)
+        cy = height // 2
+        if self.icon_min:
+            self.title_canvas.create_image(
+                int(width * 0.88), cy, image=self.icon_min, tags="icons"
+            )
+        if self.icon_max:
+            self.title_canvas.create_image(
+                int(width * 0.93), cy, image=self.icon_max, tags="icons"
+            )
+        if self.icon_close:
+            self.title_canvas.create_image(
+                int(width * 0.98), cy, image=self.icon_close, tags="icons"
+            )
+    # ---------- page + backgrounds ----------
     def _build_page(self):
-        # outer area (for app background)
         self.outer = tk.Frame(self.root, bg=PURPLE)
         self.outer.pack(fill="both", expand=True)
 
-        # background label sits behind everything
+        # label that will show the galaxy background
         self.outer_bg_label = tk.Label(self.outer, bg=PURPLE)
         self.outer_bg_label.place(relx=0, rely=0, relwidth=1, relheight=1)
 
-        # page container sits on top
-        self.page_container = tk.Frame(
-            self.outer,
-            bg=PURPLE,
-            padx=40,
-            pady=40,
-        )
+        self.page_container = tk.Frame(self.outer, bg=PURPLE, padx=2, pady=2)
         self.page_container.pack(fill="both", expand=True)
 
         self.page = tk.Frame(self.page_container, bg=PAGE_BG_FALLBACK, bd=0, highlightthickness=0)
         self.page.pack(fill="both", expand=True)
 
-        # page background image
+        # label that will show the notebook page background
         self.page_bg_label = tk.Label(self.page, bg=PAGE_BG_FALLBACK)
         self.page_bg_label.place(relx=0, rely=0, relwidth=1, relheight=1)
 
+
     def _render_backgrounds(self):
-        # app background
+        # full app background (galaxy)
         if self.base_app_bg_img is not None:
             w = max(self.outer.winfo_width(), 1)
             h = max(self.outer.winfo_height(), 1)
@@ -247,7 +233,7 @@ class ChecklistUI:
         else:
             self.outer_bg_label.configure(image="", bg=PURPLE)
 
-        # page background
+        # page notebook background
         if self.base_page_bg_img is not None:
             w = max(self.page.winfo_width(), 1)
             h = max(self.page.winfo_height(), 1)
@@ -257,9 +243,9 @@ class ChecklistUI:
         else:
             self.page_bg_label.configure(image="", bg=PAGE_BG_FALLBACK)
 
-    # ---------- title area ----------
+    # ---------- title ----------
     def _build_title(self):
-        title_frame = tk.Frame(self.page, bg="#ffffff", highlightthickness=0)
+        title_frame = tk.Frame(self.page, bg="", highlightthickness=0)
         title_frame.pack(fill="x", padx=20, pady=(20, 10))
 
         self.title_var = tk.StringVar(value="Check List Title")
@@ -276,33 +262,34 @@ class ChecklistUI:
         )
         title_entry.pack(fill="x")
 
-    # ---------- list ----------
+       
+       # ---------- list ----------
     def _build_list(self):
-        list_frame = tk.Frame(self.page, bg="#ffffff", highlightthickness=0)
+        # let the page background show
+        list_frame = tk.Frame(self.page, bg="", highlightthickness=0)
         list_frame.pack(fill="both", expand=True, padx=20, pady=(10, 20))
 
-        # margin line (still drawn so it matches image)
-        margin = tk.Frame(list_frame, bg=PURPLE, width=4)
-        margin.pack(side="left", fill="y", padx=(0, 12))
+        list_frame.bind("<ButtonPress-1>", self._start_move)
+        list_frame.bind("<B1-Motion>", self._on_move)
 
-        rows_frame = tk.Frame(list_frame, bg="#ffffff", highlightthickness=0)
+        rows_frame = tk.Frame(list_frame, bg="", highlightthickness=0)
         rows_frame.pack(side="left", fill="both", expand=True)
 
         self.items = []
 
         for _ in range(12):
-            row_container = tk.Frame(rows_frame, bg="#ffffff", highlightthickness=0)
+            row_container = tk.Frame(rows_frame, bg="", highlightthickness=0)
             row_container.pack(fill="x")
 
-            row = tk.Frame(row_container, bg="#ffffff", highlightthickness=0)
+            row = tk.Frame(row_container, bg="", highlightthickness=0)
             row.pack(fill="x", pady=6)
 
             var = tk.BooleanVar(value=False)
 
             cb_kwargs = dict(
                 variable=var,
-                bg="#ffffff",
-                activebackground="#ffffff",
+                bg=PAGE_BG_FALLBACK,
+                activebackground=PAGE_BG_FALLBACK,
                 highlightthickness=0,
                 bd=0,
                 pady=0,
@@ -320,18 +307,49 @@ class ChecklistUI:
             cb = tk.Checkbutton(row, **cb_kwargs)
             cb.pack(side="left")
 
+            # label that sits directly on top of the page image (no box)
+            label = tk.Label(
+                row,
+                text="",
+                font=("Consolas", 14),
+                bg=PAGE_BG_FALLBACK,            # let page_bg show
+                anchor="w",
+            )
+            label.pack(side="left", fill="x", expand=True, padx=(10, 0))
+
+            # hidden Entry used only while editing
             entry = tk.Entry(
                 row,
                 font=("Consolas", 14),
                 bd=0,
                 highlightthickness=0,
                 bg="#ffffff",
+                insertbackground=PURPLE,
             )
-            entry.pack(side="left", fill="x", expand=True, padx=(10, 0))
+            # start hidden
+            entry.place_forget()
 
-            self.items.append((var, cb, entry))
+            def start_edit(event, lbl=label, ent=entry):
+                ent.delete(0, "end")
+                ent.insert(0, lbl.cget("text"))
+                # overlay entry exactly where the label is
+                ent.place(x=lbl.winfo_x(), y=lbl.winfo_y(),
+                          width=lbl.winfo_width(), height=lbl.winfo_height())
+                ent.focus_set()
 
-    # ---------- event handlers ----------
+            def finish_edit(event, lbl=label, ent=entry):
+                lbl.config(text=ent.get())
+                ent.place_forget()
+                return "break"
+
+            label.bind("<Button-1>", start_edit)
+            entry.bind("<Return>", finish_edit)
+            entry.bind("<FocusOut>", finish_edit)
+
+            self.items.append((var, cb, label, entry))
+
+
+    # ---------- events ----------
     def _on_resize(self, event):
         if event.widget is self.root:
             self._render_tabbar()
@@ -348,18 +366,10 @@ class ChecklistUI:
             self.root.geometry(f"+{x}+{y}")
 
     def _on_title_click(self, event):
-        """Map click x-position to tab/button using width ratios."""
         width = max(self.title_canvas.winfo_width(), 1)
-        r = event.x / width  # 0.0 to 1.0
+        r = event.x / width  # 0..1
 
-        # Tabs (based on 600px original):
-        # File:     0   - 100  -> 0.0   - 0.1667
-        # Settings: 100 - 200  -> 0.1667- 0.3333
-        # Themes:   200 - 300  -> 0.3333- 0.5
-        # Tools:    300 - 400  -> 0.5   - 0.6667
-        # XP:       400 - 500  -> 0.6667- 0.8333
-        # Buttons:  min ~0.858, max ~0.9, close ~0.95+
-
+        # tabs based on 600px design
         if r < (100 / 600):
             self._open_menu("File", event)
         elif r < (200 / 600):
@@ -370,6 +380,7 @@ class ChecklistUI:
             self._open_menu("Tools", event)
         elif r < (500 / 600):
             self._open_menu("XP", event)
+        # window buttons right side
         elif r >= (570 / 600):
             self._close()
         elif r >= (540 / 600):
@@ -408,6 +419,5 @@ class ChecklistUI:
     def _close(self):
         self.root.destroy()
 
-    # ---------- placeholder ----------
     def _todo(self):
         print("TODO: Not implemented yet")
