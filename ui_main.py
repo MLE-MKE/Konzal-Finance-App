@@ -18,7 +18,6 @@ class ChecklistUI:
         # image storage
         self.base_tabbar_img = None
         self.base_app_bg_img = None
-        self.base_page_bg_img = None
         self.checkbox_unchecked = None
         self.checkbox_checked = None
         self.icon_min = None
@@ -71,15 +70,15 @@ class ChecklistUI:
         if p.exists():
             self.base_tabbar_img = Image.open(p).convert("RGBA")
 
-        # full background (galaxy)
-        p = dbg("app_background.png")
+        # full window background (merged galaxy + page)
+        p = dbg("background.png")      # <--- new merged image
         if p.exists():
             self.base_app_bg_img = Image.open(p).convert("RGBA")
 
-        # page background (notebook)
-        p = dbg("page_bg.png")
-        if p.exists():
-            self.base_page_bg_img = Image.open(p).convert("RGBA")
+        # we no longer need base_page_bg_img
+        self.base_page_bg_img = None
+
+        # checkboxes and icons stay the same ...
 
         # checkboxes
         p_unchecked = dbg("checkbox_unchecked.png")
@@ -204,44 +203,27 @@ class ChecklistUI:
             )
     # ---------- page + backgrounds ----------
     def _build_page(self):
-        self.outer = tk.Frame(self.root, bg=PURPLE)
+        self.outer = tk.Frame(self.root, bg=PURPLE, bd=0, highlightthickness=0)
         self.outer.pack(fill="both", expand=True)
 
-        # label that will show the galaxy background
-        self.outer_bg_label = tk.Label(self.outer, bg=PURPLE)
+        # single background image for the whole app
+        self.outer_bg_label = tk.Label(self.outer, bg=PURPLE, bd=0, highlightthickness=0)
         self.outer_bg_label.place(relx=0, rely=0, relwidth=1, relheight=1)
 
-        self.page_container = tk.Frame(self.outer, bg=PURPLE, padx=2, pady=2)
-        self.page_container.pack(fill="both", expand=True)
-
-        self.page = tk.Frame(self.page_container, bg=PAGE_BG_FALLBACK, bd=0, highlightthickness=0)
-        self.page.pack(fill="both", expand=True)
-
-        # label that will show the notebook page background
-        self.page_bg_label = tk.Label(self.page, bg=PAGE_BG_FALLBACK)
-        self.page_bg_label.place(relx=0, rely=0, relwidth=1, relheight=1)
+        # content container on top (no colored border)
+        self.page = tk.Frame(self.outer, bg="", bd=0, highlightthickness=0)
+        self.page.pack(fill="both", expand=True, padx=0, pady=0)
 
 
     def _render_backgrounds(self):
-        # full app background (galaxy)
         if self.base_app_bg_img is not None:
             w = max(self.outer.winfo_width(), 1)
             h = max(self.outer.winfo_height(), 1)
             resized = self.base_app_bg_img.resize((w, h), Image.BILINEAR)
-            self.images["app_bg_scaled"] = ImageTk.PhotoImage(resized)
-            self.outer_bg_label.configure(image=self.images["app_bg_scaled"])
+            self.images["background_scaled"] = ImageTk.PhotoImage(resized)
+            self.outer_bg_label.configure(image=self.images["background_scaled"])
         else:
             self.outer_bg_label.configure(image="", bg=PURPLE)
-
-        # page notebook background
-        if self.base_page_bg_img is not None:
-            w = max(self.page.winfo_width(), 1)
-            h = max(self.page.winfo_height(), 1)
-            resized = self.base_page_bg_img.resize((w, h), Image.BILINEAR)
-            self.images["page_bg_scaled"] = ImageTk.PhotoImage(resized)
-            self.page_bg_label.configure(image=self.images["page_bg_scaled"])
-        else:
-            self.page_bg_label.configure(image="", bg=PAGE_BG_FALLBACK)
 
     # ---------- title ----------
     def _build_title(self):
