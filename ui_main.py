@@ -290,7 +290,7 @@ class ChecklistUI:
     #             # make sure bg is at the back
     #             self.canvas.tag_lower("bg")
     #         else:
-    #             self.canvas.itemconfig(self.bg_image_id, image=self.images["app_bg_scaled"])
+    #             self.canvas.itemconfig(self.bg_image_id, image=self.images["app_bg_scaled"])   
     #     else:
     #         # solid fallback
     #         self.canvas.configure(bg=PAGE_BG_FALLBACK)
