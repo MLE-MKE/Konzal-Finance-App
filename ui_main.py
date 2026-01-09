@@ -45,6 +45,10 @@ class ChecklistUI:
         self.row_h = 34
 
         self._build_title()
+        
+        self.max_rows = 20
+        self.item_texts = [""] * self.max_rows
+        self._build_add_bar()
         self._build_list()
 
 
@@ -175,6 +179,41 @@ class ChecklistUI:
         self.title_canvas.bind("<ButtonPress-1>", self._start_move)
         self.title_canvas.bind("<B1-Motion>", self._on_move)
         self.title_canvas.bind("<Button-1>", self._on_title_click)
+
+    def _build_add_bar(self):
+        bar = tk.Frame(self.content, bg="", bd=0, highlightthickness=0)
+        bar.pack(fill="x", padx=20, pady=(0, 10))
+
+        self.new_item_var = tk.StringVar()
+
+        entry = tk.Entry(
+            bar,
+            textvariable=self.new_item_var,
+            font=("Consolas", 14),
+            bd=0,
+            highlightthickness=1,
+            relief="solid",
+            bg="#ffffff",
+            insertbackground=PURPLE,
+        )
+        entry.pack(side="left", fill="x", expand=True)
+
+        btn = tk.Button(
+            bar,
+            text="Add",
+            font=("Consolas", 12, "bold"),
+            bd=0,
+            padx=14,
+            pady=6,
+            bg=PURPLE,
+            fg="white",
+            activebackground=PURPLE,
+            activeforeground="white",
+            command=self._add_item_from_bar,
+        )
+        btn.pack(side="left", padx=(10, 0))
+
+        entry.bind("<Return>", lambda e: self._add_item_from_bar())
 
     def _render_tabbar(self):
         self.title_canvas.delete("all")
@@ -307,7 +346,7 @@ class ChecklistUI:
         self.canvas_items.clear()
 
         # create 12 empty rows
-        for i in range(12):
+        for i in range(self.max_rows):
             var = tk.BooleanVar(value=False)
 
             # create checkbox image
@@ -318,7 +357,7 @@ class ChecklistUI:
             text_id = self.canvas.create_text(
                 0, 0,
                 anchor="nw",
-                text="",
+                text=self.item_texts[i],
                 font=("Consolas", 14),
                 fill="black"
             )
@@ -381,6 +420,26 @@ class ChecklistUI:
             self.canvas.coords(item["entry_win_id"], text_x, y)
             self.canvas.itemconfigure(item["entry_win_id"], width=max_text_w)
 
+def _add_item_from_bar(self):
+    text = self.new_item_var.get().strip()
+    if not text:
+        return
+
+    idx = self._first_empty_row()
+    if idx is None:
+        return  # no space left (could expand max_rows later)
+
+    self.item_texts[idx] = text
+    self.canvas.itemconfig(self.canvas_items[idx]["text_id"], text=text)
+
+    self.new_item_var.set("")
+
+    def _first_empty_row(self):
+        for i, t in enumerate(self.item_texts):
+            if not t.strip():
+                return i
+        return None
+
     def _toggle_item(self, idx: int):
         item = self.canvas_items[idx]
         v = item["var"]
@@ -409,6 +468,7 @@ class ChecklistUI:
         ent = item["entry"]
 
         new_text = ent.get()
+        self.item_texts[idx] = new_text 
         self.canvas.itemconfig(item["text_id"], text=new_text)
 
         # hide entry
