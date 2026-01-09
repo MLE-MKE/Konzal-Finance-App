@@ -40,9 +40,9 @@ class ChecklistUI:
 
         # canvas-list state MUST exist before _build_list
         self.canvas_items = []
-        self.list_padx = 30
-        self.list_start_y = 130
-        self.row_h = 34
+        self.list_padx = 24
+        self.list_start_y = 188
+        self.row_h = 36
 
         self._build_title()
         
@@ -405,19 +405,20 @@ class ChecklistUI:
         x0 = self.list_padx
         y0 = self.list_start_y
 
-        cb_size = 24  # adjust if your checkbox images are a different size
-        text_x = x0 + cb_size + 12
+        cb_size = 24  
+        text_x = x0 + cb_size + 14
         max_text_w = max(100, w - text_x - self.list_padx)
 
         for i, item in enumerate(self.canvas_items):
             y = y0 + i * self.row_h
 
             # position checkbox + text
-            self.canvas.coords(item["cb_id"], x0, y)
-            self.canvas.coords(item["text_id"], text_x, y + 2)
+            self.canvas.coords(item["cb_id"], x0, y + (self.row_h - cb_size) // 2)
+            
+            self.canvas.coords(item["text_id"], text_x, y + 9)
 
             # keep entry aligned with text, when shown
-            self.canvas.coords(item["entry_win_id"], text_x, y)
+            self.canvas.coords(item["entry_win_id"], text_x, y+4)
             self.canvas.itemconfigure(item["entry_win_id"], width=max_text_w)
 
     def _add_item_from_bar(self):
