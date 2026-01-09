@@ -420,19 +420,18 @@ class ChecklistUI:
             self.canvas.coords(item["entry_win_id"], text_x, y)
             self.canvas.itemconfigure(item["entry_win_id"], width=max_text_w)
 
-def _add_item_from_bar(self):
-    text = self.new_item_var.get().strip()
-    if not text:
-        return
+    def _add_item_from_bar(self):
+        text = self.new_item_var.get().strip()
+        if not text:
+            return
 
-    idx = self._first_empty_row()
-    if idx is None:
-        return  # no space left (could expand max_rows later)
+        idx = self._first_empty_row()
+        if idx is None:
+            return  # no space left (could expand max_rows later)
 
-    self.item_texts[idx] = text
-    self.canvas.itemconfig(self.canvas_items[idx]["text_id"], text=text)
-
-    self.new_item_var.set("")
+        self.item_texts[idx] = text
+        self.canvas.itemconfig(self.canvas_items[idx]["text_id"], text=text)
+        self.new_item_var.set("")
 
     def _first_empty_row(self):
         for i, t in enumerate(self.item_texts):
@@ -450,15 +449,12 @@ def _add_item_from_bar(self):
 
     def _start_edit_item(self, idx: int):
         item = self.canvas_items[idx]
-
-        # pull current text from canvas
         current = self.canvas.itemcget(item["text_id"], "text")
 
         ent = item["entry"]
         ent.delete(0, "end")
         ent.insert(0, current)
 
-        # show entry
         self.canvas.itemconfigure(item["entry_win_id"], state="normal")
         ent.focus_set()
         ent.icursor("end")
@@ -468,10 +464,9 @@ def _add_item_from_bar(self):
         ent = item["entry"]
 
         new_text = ent.get()
-        self.item_texts[idx] = new_text 
+        self.item_texts[idx] = new_text
         self.canvas.itemconfig(item["text_id"], text=new_text)
 
-        # hide entry
         self.canvas.itemconfigure(item["entry_win_id"], state="hidden")
         return "break"
 
