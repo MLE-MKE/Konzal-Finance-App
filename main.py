@@ -13,19 +13,19 @@ if __name__ == "__main__":
 #I PUSHED THIS TO THE WRONG REPOSITORY AHHHHHH
 
 # Things to add and do later so I dont loose track of my structure. 
-# ui_main.py – main window layout and widget wiring
+# ui main dot py main window layout and widget wiring
 
-# tasks.py – task list logic and Task model
+# tasks.py task list logic and Task model
 
-# file_manager.py – save/open/import/export logic
+# file_manager.py save/open/import/export logic
 
-# settings_manager.py – fonts, colors, bullet styles
+# settings_manager.py  fonts, colors, bullet styles
 
-# theme_manager.py – themes, backgrounds, “stickers later”
+# theme_manager.py  themes, backgrounds, “stickers later”
 
-# xp_manager.py – XP, projects completed, sticker unlocks
+# xp_manager.py XP, projects completed, sticker unlocks
 
-# timer.py – task timer logic (Tools → Task Timer)
+# timer.py  task timer logic (Tools → Task Timer)
 
 # config.py – constants, paths, version, defaults (optional but clean)
 

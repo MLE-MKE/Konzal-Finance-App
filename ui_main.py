@@ -1,3 +1,4 @@
+# -*- coding: utf-8 -*-
 # ui_main.py
 # Canvas-based UI for "Checklist Quest"
 
@@ -37,9 +38,15 @@ class ChecklistUI:
         self._build_titlebar()
         self._build_canvas_and_content()
 
-        # build UI inside content frame
+        # canvas-list state MUST exist before _build_list
+        self.canvas_items = []
+        self.list_padx = 30
+        self.list_start_y = 130
+        self.row_h = 34
+
         self._build_title()
         self._build_list()
+
 
         # # DEBUG + first render
         # print("=== ABOUT TO CALL _render_backgrounds DIRECTLY ===")
@@ -246,54 +253,34 @@ class ChecklistUI:
         self.canvas.bind("<Configure>", on_canvas_resize)
 
 
+
+    # # ---------- backgrounds ----------
     def _render_backgrounds(self):
-        print("=== _render_backgrounds CALLED ===")
         if self.base_app_bg_img is None:
-            print("No app bg loaded")
             return
 
         w = self.canvas.winfo_width()
         h = self.canvas.winfo_height()
-        print("Canvas size:", w, "x", h)
-
         if w < 5 or h < 5:
-            return  # window hasn't drawn yet
+            return
 
         resized = self.base_app_bg_img.resize((w, h), Image.BILINEAR)
         self.images["app_bg_scaled"] = ImageTk.PhotoImage(resized)
 
         if self.bg_image_id is None:
             self.bg_image_id = self.canvas.create_image(
-                0, 0,
-                anchor="nw",
-                image=self.images["app_bg_scaled"]
+                0, 0, anchor="nw", image=self.images["app_bg_scaled"]
             )
-            print("Created bg_image_id:", self.bg_image_id)
+            self.canvas.tag_lower(self.bg_image_id)  # ← RIGHT HERE
         else:
-            self.canvas.itemconfig(self.bg_image_id, image=self.images["app_bg_scaled"])
-            print("Updated bg_image_id:", self.bg_image_id)
+            self.canvas.itemconfig(
+                self.bg_image_id, image=self.images["app_bg_scaled"]
+            )
 
-    # # ---------- backgrounds ----------
-    # def _render_backgrounds(self):
-  
+        # keep canvas checklist aligned
+        self._layout_canvas_list()
 
-    #     if self.base_app_bg_img is not None and self.canvas is not None:
-    #         w = max(self.canvas.winfo_width(), 1)
-    #         h = max(self.canvas.winfo_height(), 1)
-    #         resized = self.base_app_bg_img.resize((w, h), Image.BILINEAR)
-    #         self.images["app_bg_scaled"] = ImageTk.PhotoImage(resized)
-
-    #         if self.bg_image_id is None:
-    #             self.bg_image_id = self.canvas.create_image(
-    #                 0, 0, anchor="nw", image=self.images["app_bg_scaled"], tags="bg"
-    #             )
-    #             # make sure bg is at the back
-    #             self.canvas.tag_lower("bg")
-    #         else:
-    #             self.canvas.itemconfig(self.bg_image_id, image=self.images["app_bg_scaled"])   
-    #     else:
-    #         # solid fallback
-    #         self.canvas.configure(bg=PAGE_BG_FALLBACK)
+   
 
     # ---------- title inside content ----------
     def _build_title(self):
@@ -316,85 +303,118 @@ class ChecklistUI:
 
     # ---------- list ----------
     def _build_list(self):
-        list_frame = tk.Frame(self.content, bg="", highlightthickness=0, bd=0)
-        list_frame.pack(fill="both", expand=True, padx=20, pady=(10, 20))
+        # Canvas-based list (no Frames, no Checkbutton widgets)
+        self.canvas_items.clear()
 
-        # allow dragging from empty areas in list_frame
-        list_frame.bind("<ButtonPress-1>", self._start_move)
-        list_frame.bind("<B1-Motion>", self._on_move)
-
-        self.items = []
-
+        # create 12 empty rows
         for i in range(12):
-            row_frame = tk.Frame(list_frame, bg="", highlightthickness=0, bd=0)
-            row_frame.pack(fill="x", pady=4)
-
             var = tk.BooleanVar(value=False)
 
-            # base checkbox kwargs
-            cb_kwargs = dict(
-                variable=var,
-                highlightthickness=0,
-                bd=0,
-                pady=0,
-                padx=0,
-                # let Tk use the parent bg instead of painting a solid block
-            )
+            # create checkbox image
+            cb_img = self.checkbox_checked if var.get() else self.checkbox_unchecked
+            cb_id = self.canvas.create_image(0, 0, anchor="nw", image=cb_img)
 
-
-            # use custom images if available
-            if self.checkbox_unchecked and self.checkbox_checked:
-                cb_kwargs.update(
-                    image=self.checkbox_unchecked,
-                    selectimage=self.checkbox_checked,
-                    indicatoron=False,
-                    compound="center",
-                )
-
-            cb = tk.Checkbutton(row_frame, **cb_kwargs)
-            cb.pack(side="left")
-
-            # label that visually sits on background (same color as page)
-            label = tk.Label(
-                row_frame,
+            # create text
+            text_id = self.canvas.create_text(
+                0, 0,
+                anchor="nw",
                 text="",
                 font=("Consolas", 14),
-                fg="black",
-                anchor="w",
+                fill="black"
             )
 
-            label.pack(side="left", fill="x", expand=True, padx=(10, 0))
-
-            # hidden Entry used only while editing
+            # editing entry (hidden until used)
             entry = tk.Entry(
-                row_frame,
+                self.root,                 # root is fine; it will be embedded into canvas
                 font=("Consolas", 14),
                 bd=0,
-                highlightthickness=0,
+                highlightthickness=1,
+                relief="solid",
                 bg="#ffffff",
-                insertbackground=PURPLE,
+                insertbackground=PURPLE
             )
+            entry_win_id = self.canvas.create_window(0, 0, anchor="nw", window=entry)
+            self.canvas.itemconfigure(entry_win_id, state="hidden")
 
-            def start_edit(event, lbl=label, ent=entry):
-                # copy current label text into entry
-                ent.delete(0, "end")
-                ent.insert(0, lbl.cget("text"))
+            item = {
+                "var": var,
+                "cb_id": cb_id,
+                "text_id": text_id,
+                "entry": entry,
+                "entry_win_id": entry_win_id,
+            }
+            self.canvas_items.append(item)
 
-                # place entry exactly over label
-                ent.place(x=lbl.winfo_x(), y=lbl.winfo_y(),
-                          width=lbl.winfo_width(), height=lbl.winfo_height())
-                ent.focus_set()
+            # bindings
+            self.canvas.tag_bind(cb_id, "<Button-1>", lambda e, idx=i: self._toggle_item(idx))
+            self.canvas.tag_bind(text_id, "<Button-1>", lambda e, idx=i: self._start_edit_item(idx))
 
-            def finish_edit(event, lbl=label, ent=entry):
-                lbl.config(text=ent.get())
-                ent.place_forget()
-                return "break"
+            entry.bind("<Return>", lambda e, idx=i: self._finish_edit_item(idx))
+            entry.bind("<FocusOut>", lambda e, idx=i: self._finish_edit_item(idx))
 
-            label.bind("<Button-1>", start_edit)
-            entry.bind("<Return>", finish_edit)
-            entry.bind("<FocusOut>", finish_edit)
+        # initial layout
+        self._layout_canvas_list()
 
-            self.items.append((var, cb, label, entry))
+    def _layout_canvas_list(self):
+        if not self.canvas_items:
+            return
+
+        w = self.canvas.winfo_width()
+        if w < 10:
+            return
+
+        x0 = self.list_padx
+        y0 = self.list_start_y
+
+        cb_size = 24  # adjust if your checkbox images are a different size
+        text_x = x0 + cb_size + 12
+        max_text_w = max(100, w - text_x - self.list_padx)
+
+        for i, item in enumerate(self.canvas_items):
+            y = y0 + i * self.row_h
+
+            # position checkbox + text
+            self.canvas.coords(item["cb_id"], x0, y)
+            self.canvas.coords(item["text_id"], text_x, y + 2)
+
+            # keep entry aligned with text, when shown
+            self.canvas.coords(item["entry_win_id"], text_x, y)
+            self.canvas.itemconfigure(item["entry_win_id"], width=max_text_w)
+
+    def _toggle_item(self, idx: int):
+        item = self.canvas_items[idx]
+        v = item["var"]
+        v.set(not v.get())
+
+        img = self.checkbox_checked if v.get() else self.checkbox_unchecked
+        self.canvas.itemconfig(item["cb_id"], image=img)
+
+    def _start_edit_item(self, idx: int):
+        item = self.canvas_items[idx]
+
+        # pull current text from canvas
+        current = self.canvas.itemcget(item["text_id"], "text")
+
+        ent = item["entry"]
+        ent.delete(0, "end")
+        ent.insert(0, current)
+
+        # show entry
+        self.canvas.itemconfigure(item["entry_win_id"], state="normal")
+        ent.focus_set()
+        ent.icursor("end")
+
+    def _finish_edit_item(self, idx: int):
+        item = self.canvas_items[idx]
+        ent = item["entry"]
+
+        new_text = ent.get()
+        self.canvas.itemconfig(item["text_id"], text=new_text)
+
+        # hide entry
+        self.canvas.itemconfigure(item["entry_win_id"], state="hidden")
+        return "break"
+
 
     # ---------- events ----------
     def _on_resize(self, event):
