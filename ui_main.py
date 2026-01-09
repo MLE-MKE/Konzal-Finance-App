@@ -38,11 +38,13 @@ class ChecklistUI:
         self._build_titlebar()
         self._build_canvas_and_content()
 
+        self.cb_nudge_y = 0  # use -1 or -2 if boxes sit slightly low
+
         # canvas-list state MUST exist before _build_list
         self.canvas_items = []
         self.list_padx = 24
-        self.list_start_y = 188
-        self.row_h = 36
+        self.list_start_y = 172
+        self.row_h = 35.6
 
         self._build_title()
         
@@ -181,13 +183,13 @@ class ChecklistUI:
         self.title_canvas.bind("<Button-1>", self._on_title_click)
 
     def _build_add_bar(self):
-        bar = tk.Frame(self.content, bg="", bd=0, highlightthickness=0)
-        bar.pack(fill="x", padx=20, pady=(0, 10))
+        self.add_bar = tk.Frame(self.content, bg="white", bd=0, highlightthickness=0)
+        self.add_bar.pack(fill="x", padx=20, pady=(0, 10))
 
         self.new_item_var = tk.StringVar()
 
         entry = tk.Entry(
-            bar,
+            self.add_bar,
             textvariable=self.new_item_var,
             font=("Consolas", 14),
             bd=0,
@@ -199,7 +201,7 @@ class ChecklistUI:
         entry.pack(side="left", fill="x", expand=True)
 
         btn = tk.Button(
-            bar,
+            self.add_bar,
             text="Add",
             font=("Consolas", 12, "bold"),
             bd=0,
@@ -249,6 +251,7 @@ class ChecklistUI:
 
     # ---------- canvas + content ----------
     def _build_canvas_and_content(self):
+        self.header_panel_id = None
         # main canvas holds background image + content frame
         self.canvas = tk.Canvas(
             self.root,
@@ -266,7 +269,7 @@ class ChecklistUI:
         self.bg_image_id = None
 
         # content frame (everything except tabbar)
-        self.content = tk.Frame(self.canvas, bg="", bd=0, highlightthickness=0)
+        self.content = tk.Frame(self.canvas, bg="white", bd=0, highlightthickness=0)
 
         # place content using create_window so it moves with canvas
         self.content_window_id = self.canvas.create_window(
@@ -275,6 +278,35 @@ class ChecklistUI:
             anchor="nw",
             window=self.content,
         )
+    def _render_header_panel(self):
+        # Must run after widgets have sizes
+        self.root.update_idletasks()
+
+        w = self.canvas.winfo_width()
+        if w < 10:
+            return
+
+        # Measure how tall the title + add bar area actually is
+        title_h = self.title_frame.winfo_height() if hasattr(self, "title_frame") else 0
+        add_h = self.add_bar.winfo_height() if hasattr(self, "add_bar") else 0
+
+        panel_h = max(120, title_h + add_h + 30)  # extra padding
+
+        if self.header_panel_id is None:
+            self.header_panel_id = self.canvas.create_rectangle(
+                0, 0, w, panel_h,
+                fill="white",
+                outline=""
+            )
+        else:
+            self.canvas.coords(self.header_panel_id, 0, 0, w, panel_h)
+
+        # Layering: background at back, then panel, then content widgets
+        if self.bg_image_id is not None:
+            self.canvas.tag_lower(self.bg_image_id)
+        self.canvas.tag_raise(self.header_panel_id)
+        self.canvas.tag_raise(self.content_window_id)
+
 
         # keep content stretched horizontally when canvas resizes
         def on_canvas_resize(event):
@@ -286,10 +318,13 @@ class ChecklistUI:
 
             # only redraw background when the canvas is actually a real size
             if event.width > 10 and event.height > 10:
+                
                 print("  on_canvas_resize -> calling _render_backgrounds")
                 self._render_backgrounds()
+                self._render_header_panel()
 
         self.canvas.bind("<Configure>", on_canvas_resize)
+        
 
 
 
@@ -318,18 +353,20 @@ class ChecklistUI:
 
         # keep canvas checklist aligned
         self._layout_canvas_list()
+        
+        self._render_header_panel()
 
    
 
     # ---------- title inside content ----------
     def _build_title(self):
-        title_frame = tk.Frame(self.content, bg="", highlightthickness=0, bd=0)
-        title_frame.pack(fill="x", padx=20, pady=(20, 10))
+        self.title_frame = tk.Frame(self.content, bg="white", highlightthickness=0, bd=0)
+        self.title_frame.pack(fill="x", padx=20, pady=(20, 10))
 
         self.title_var = tk.StringVar(value="Check List Title")
 
         title_entry = tk.Entry(
-            title_frame,
+            self.title_frame,
             textvariable=self.title_var,
             font=("Consolas", 28, "bold"),
             bd=0,
@@ -410,12 +447,14 @@ class ChecklistUI:
         max_text_w = max(100, w - text_x - self.list_padx)
 
         for i, item in enumerate(self.canvas_items):
-            y = y0 + i * self.row_h
+            y_line = int(round(self.list_start_y + i * self.row_h))  # this is the ruled line Y
 
-            # position checkbox + text
-            self.canvas.coords(item["cb_id"], x0, y + (self.row_h - cb_size) // 2)
-            
-            self.canvas.coords(item["text_id"], text_x, y + 9)
+            cb_y = y_line - (cb_size // 2) + self.cb_nudge_y
+            self.canvas.coords(item["cb_id"], x0, cb_y)
+
+            # keep text aligned to the same line
+            self.canvas.coords(item["text_id"], text_x, y_line - 10)   # adjust only if needed
+            self.canvas.coords(item["entry_win_id"], text_x, y_line - 12)
 
             # keep entry aligned with text, when shown
             self.canvas.coords(item["entry_win_id"], text_x, y+4)
